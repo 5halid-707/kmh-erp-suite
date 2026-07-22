@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import crypto from "crypto";
+import { initDb } from "@/lib/init-db";
 
 const SESSION_COOKIE = "kmh_session";
 const SESSION_DURATION_DAYS = 7;
@@ -97,6 +98,12 @@ export async function getCurrentUser() {
 }
 
 export async function requireAuth(allowedRoles?: string[]) {
+  // Ensure DB is initialized before any auth check (for Vercel serverless)
+  try {
+    await initDb();
+  } catch (e) {
+    console.error("[auth] initDb failed:", e);
+  }
   const user = await getCurrentUser();
   if (!user) {
     return { user: null, error: "UNAUTHORIZED", status: 401 };

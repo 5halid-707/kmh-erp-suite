@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, createSession, hashPassword, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from "@/lib/auth";
 import { logAction } from "@/lib/audit";
+import { initDb } from "@/lib/init-db";
 
 // Auto-bootstrap on first run - create org + admin user if DB is empty
 async function bootstrap() {
@@ -53,8 +54,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "البريد الإلكتروني وكلمة المرور مطلوبة" }, { status: 400 });
     }
 
-    // Auto-bootstrap on first login attempt if no users exist
-    await bootstrap();
+    // Ensure DB is initialized (creates schema + seed on Vercel serverless)
+    await initDb();
 
     const user = await db.user.findUnique({
       where: { email: email.toLowerCase().trim() },
