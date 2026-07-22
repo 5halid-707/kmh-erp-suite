@@ -72,13 +72,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "بيانات الدخول غير صحيحة" }, { status: 401 });
     }
 
-    const { token, expiresAt } = await createSession(user.id, req);
+    const { token, expiresAt } = await createSession(user, req);
 
-    // Update last login
-    await db.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
+    // Update last login (best-effort — ignore errors on Vercel)
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
+    } catch (e) {
+      console.error("[login] failed to update lastLogin:", e);
+    }
 
     // Audit log
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || null;

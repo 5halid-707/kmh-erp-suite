@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
     "*.space-z.ai",
     "*.vercel.app",
   ],
+  // Vercel serverless: ensure /tmp is used for SQLite
+  env: {
+    JWT_SECRET: process.env.JWT_SECRET || "kmh-erp-jwt-secret-2026-secure",
+  },
 };
 
 export default nextConfig;
