@@ -23,7 +23,12 @@ export const metadata: Metadata = {
     "نظام إدارة أعمال متكامل يحاكي أضخم الأنظمة العالمية (SAP / Oracle / Odoo) مع أتمتة كاملة للعمليات بين الوحدات. تصميم خالد الحربي.",
   keywords: ["ERP", "Cashier", "Accounting", "HR", "نظام إدارة", "محاسبة", "موارد بشرية"],
   authors: [{ name: "Khalid Al-harbi" }],
-  icons: { icon: "/logo.svg" },
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  manifest: "/favicon.svg",
 };
 
 export default function RootLayout({

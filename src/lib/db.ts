@@ -4,21 +4,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// On Vercel serverless, we need to use /tmp which is writable
-// On local dev, use the file path from .env
-const dbPath = process.env.NODE_ENV === 'production'
-  ? 'file:/tmp/kmh-erp.db'
-  : process.env.DATABASE_URL || 'file:./db/custom.db'
+// Use DATABASE_URL from env (PostgreSQL on Neon, or SQLite locally)
+// Falls back to local SQLite for development
+const databaseUrl = process.env.DATABASE_URL || 'file:./db/custom.db'
 
-// Override DATABASE_URL at runtime for Prisma
-if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL?.includes('/tmp')) {
-  process.env.DATABASE_URL = dbPath
+if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
+  process.env.DATABASE_URL = databaseUrl
 }
 
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'production' ? ['error'] : ['query'],
+    log: process.env.NODE_ENV === 'production' ? ['error'] : ['error'],
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
