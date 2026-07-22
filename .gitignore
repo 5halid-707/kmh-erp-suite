@@ -36,7 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -48,7 +47,23 @@ dev.log
 dev.out.log
 test
 prompt
-
 server.log
+
+# Database files (contain seed data with credentials)
+db/*.db
+db/*.db-journal
+
 # Skills directory
 /skills/
+
+# Download folder (user deliverables)
+/download/
+
+# Fonts
+/fonts/
+
+# Tests
+/tests/
+
+# Z scripts
+/.zscripts/
