@@ -1,0 +1,509 @@
+// ============================================================
+// KMH ERP Suite — Prisma Schema
+// 4 modules: Cashier (POS) + Accounting + HR + ERP (Inventory/Purchasing)
+// Cross-module automation: Sale → Journal Entry → Inventory deduction → Employee commission
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// CORE: Organizations, Users, Roles
+// ============================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  legalName String?
+  taxNumber String?
+  currency  String   @default("SAR")
+  vatRate   Float    @default(15.0)
+  address   String?
+  city      String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  products       Product[]
+  categories     Category[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  employees      Employee[]
+  accounts       Account[]
+  branches       Branch[]
+  journalEntries JournalEntry[]
+  salesInvoices  SalesInvoice[]
+  purchaseOrders PurchaseOrder[]
+  stockMovements StockMovement[]
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  address        String?
+  city           String?
+  phone          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products       Product[]     @relation("BranchProduct")
+  salesInvoices  SalesInvoice[]
+  employees      Employee[]
+  stockMoves     StockMovement[]
+  users          User[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String   @unique
+  name           String
+  passwordHash   String?
+  role           UserRole @default(CASHIER)
+  branchId       String?
+  isActive       Boolean  @default(true)
+  lastLogin      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation(fields: [branchId], references: [id])
+  salesInvoices SalesInvoice[] @relation("SalesRep")
+  journalEntries JournalEntry[] @relation("CreatedBy")
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  HR_MANAGER
+  CASHIER
+  INVENTORY_MANAGER
+  BRANCH_MANAGER
+}
+
+// ============================================================
+// ERP MODULE: Products, Categories, Inventory, Stock Movements
+// ============================================================
+
+model Category {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  parentId       String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     Product[]
+  parent       Category?    @relation("CategoryParent", fields: [parentId], references: [id])
+  children     Category[]   @relation("CategoryParent")
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  organizationId String
+  branchId       String?
+  categoryId     String?
+  sku            String
+  barcode        String?
+  name           String
+  nameEn         String?
+  description    String?
+  unit           String   @default("قطعة")
+  costPrice      Float    @default(0)
+  salePrice      Float    @default(0)
+  vatRate        Float    @default(15.0)
+  reorderLevel   Int      @default(10)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation("BranchProduct", fields: [branchId], references: [id])
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  invoiceItems InvoiceItem[]
+  stockMoves   StockMovement[]
+  purchaseItems PurchaseOrderItem[]
+}
+
+model StockMovement {
+  id           String        @id @default(cuid())
+  organizationId String
+  branchId     String
+  productId    String
+  type         StockMoveType
+  quantity     Int
+  reference    String?       // invoice # or PO # or adjustment note
+  balanceAfter Int
+  notes        String?
+  createdAt    DateTime      @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+enum StockMoveType {
+  PURCHASE_IN     // وارد من شراء
+  SALE_OUT        // صادر من بيع
+  RETURN_IN       // مرتجع عميل
+  RETURN_OUT      // مرتجع مزود
+  ADJUSTMENT_IN   // تسوية موجبة
+  ADJUSTMENT_OUT  // تسوية سالبة
+  TRANSFER_IN     // تحويل وارد
+  TRANSFER_OUT    // تحويل صادر
+}
+
+model Supplier {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  contactPerson  String?
+  phone          String?
+  email          String?
+  taxNumber      String?
+  address        String?
+  city           String?
+  paymentTerms   String?
+  balanceDue     Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id             String   @id @default(cuid())
+  organizationId String
+  supplierId     String
+  poNumber       String   @unique
+  status         POStatus @default(DRAFT)
+  totalAmount    Float    @default(0)
+  vatAmount      Float    @default(0)
+  grandTotal     Float    @default(0)
+  paidAmount     Float    @default(0)
+  orderDate      DateTime @default(now())
+  expectedDate   DateTime?
+  receivedDate   DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier               @relation(fields: [supplierId], references: [id])
+  items        PurchaseOrderItem[]
+}
+
+enum POStatus {
+  DRAFT
+  SENT
+  PARTIAL_RECEIVED
+  RECEIVED
+  PARTIAL_PAID
+  PAID
+  CANCELLED
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Int
+  unitCost        Float
+  vatRate         Float   @default(15.0)
+  lineTotal       Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product        @relation(fields: [productId], references: [id])
+}
+
+// ============================================================
+// CASHIER MODULE (POS): Sales Invoices, Payments
+// ============================================================
+
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  phone          String?
+  email          String?
+  taxNumber      String?
+  address        String?
+  city           String?
+  creditLimit    Float    @default(0)
+  balanceDue     Float    @default(0)
+  loyaltyPoints  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesInvoices SalesInvoice[]
+}
+
+model SalesInvoice {
+  id             String   @id @default(cuid())
+  organizationId String
+  branchId       String
+  invoiceNumber  String   @unique
+  customerId     String?
+  salesRepId     String?  // user (cashier)
+  status         InvoiceStatus @default(COMPLETED)
+  paymentMethod  PaymentMethod
+  subtotal       Float    @default(0)
+  discountAmount Float    @default(0)
+  vatAmount      Float    @default(0)
+  grandTotal     Float    @default(0)
+  paidAmount     Float    @default(0)
+  changeAmount   Float    @default(0)
+  invoiceDate    DateTime @default(now())
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  salesRep     User?         @relation("SalesRep", fields: [salesRepId], references: [id])
+  items        InvoiceItem[]
+}
+
+enum InvoiceStatus {
+  DRAFT
+  COMPLETED
+  RETURNED
+  CANCELLED
+  CREDIT
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  WALLET
+  CREDIT
+  MIXED
+}
+
+model InvoiceItem {
+  id           String @id @default(cuid())
+  salesInvoiceId String
+  productId    String
+  quantity     Int
+  unitPrice    Float
+  discountPct  Float  @default(0)
+  vatRate      Float  @default(15.0)
+  lineTotal    Float
+
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  product      Product       @relation(fields: [productId], references: [id])
+}
+
+// ============================================================
+// ACCOUNTING MODULE: Chart of Accounts, Journal Entries
+// ============================================================
+
+model Account {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String       // e.g., 1000, 1100, 4001
+  name           String
+  nameEn         String?
+  type           AccountType
+  parentId       String?
+  isGroup        Boolean      @default(false)
+  balance        Float        @default(0)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Account?      @relation("AccountParent", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountParent")
+  journalLines JournalLine[]
+}
+
+enum AccountType {
+  ASSET          // أصول
+  LIABILITY      // التزامات
+  EQUITY         // حقوق ملكية
+  REVENUE        // إيرادات
+  EXPENSE        // مصروفات
+  COST_OF_SALES  // تكلفة المبيعات
+}
+
+model JournalEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  entryNumber    String   @unique
+  reference      String?  // invoice # or PO # or payroll batch
+  description    String
+  totalDebit     Float
+  totalCredit    Float
+  entryDate      DateTime @default(now())
+  postedAt       DateTime?
+  source         JournalSource @default(MANUAL)
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User          @relation("CreatedBy", fields: [createdById], references: [id])
+  lines        JournalLine[]
+}
+
+enum JournalSource {
+  MANUAL
+  SALES_INVOICE
+  PURCHASE_ORDER
+  PAYMENT_RECEIVED
+  PAYMENT_MADE
+  PAYROLL
+  ADJUSTMENT
+  OPENING_BALANCE
+}
+
+model JournalLine {
+  id              String  @id @default(cuid())
+  journalEntryId  String
+  accountId       String
+  debit           Float   @default(0)
+  credit          Float   @default(0)
+  description     String?
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account       @relation(fields: [accountId], references: [id])
+}
+
+// ============================================================
+// HR MODULE: Employees, Attendance, Payroll, Leaves
+// ============================================================
+
+model Employee {
+  id             String   @id @default(cuid())
+  organizationId String
+  branchId       String?
+  employeeCode   String   @unique
+  fullName       String
+  nationalId     String?
+  phone          String?
+  email          String?
+  position       String
+  department     String?
+  hireDate       DateTime @default(now())
+  terminationDate DateTime?
+  baseSalary     Float    @default(0)
+  allowances     Float    @default(0)
+  status         EmployeeStatus @default(ACTIVE)
+  bankAccount    String?
+  iban           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?        @relation(fields: [branchId], references: [id])
+  attendance   Attendance[]
+  payrollItems PayrollItem[]
+  leaves       LeaveRequest[]
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+}
+
+model Attendance {
+  id          String   @id @default(cuid())
+  employeeId  String
+  date        DateTime
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus @default(PRESENT)
+  workHours   Float    @default(0)
+  overtimeHours Float  @default(0)
+  notes       String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  WEEKEND
+  HOLIDAY
+}
+
+model LeaveRequest {
+  id          String   @id @default(cuid())
+  employeeId  String
+  type        LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  daysCount   Float
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+  approvedBy  String?
+  createdAt   DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  EMERGENCY
+  UNPAID
+  MATERNITY
+  HAJJ
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model PayrollBatch {
+  id            String   @id @default(cuid())
+  batchNumber   String   @unique
+  month         Int
+  year          Int
+  totalGross    Float    @default(0)
+  totalDeductions Float  @default(0)
+  totalNet      Float    @default(0)
+  status        String   @default("DRAFT")  // DRAFT, APPROVED, PAID
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  items PayrollItem[]
+}
+
+model PayrollItem {
+  id              String   @id @default(cuid())
+  payrollBatchId  String
+  employeeId      String
+  baseSalary      Float
+  allowances      Float
+  overtimePay     Float    @default(0)
+  grossPay        Float
+  gosiDeduction   Float    @default(0)  // التأمينات الاجتماعية
+  vatDeduction    Float    @default(0)  // not applicable but reserved
+  loanDeduction   Float    @default(0)
+  otherDeductions Float    @default(0)
+  totalDeductions Float
+  netPay          Float
+  createdAt       DateTime @default(now())
+
+  payrollBatch PayrollBatch @relation(fields: [payrollBatchId], references: [id], onDelete: Cascade)
+  employee     Employee      @relation(fields: [employeeId], references: [id])
+}
