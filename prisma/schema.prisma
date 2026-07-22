@@ -44,6 +44,10 @@ model Organization {
   salesInvoices  SalesInvoice[]
   purchaseOrders PurchaseOrder[]
   stockMovements StockMovement[]
+  auditLogs      AuditLog[]
+  departments    Department[]
+  jobPositions   JobPosition[]
+  quotations     Quotation[]
 }
 
 model Branch {
@@ -70,10 +74,11 @@ model User {
   organizationId String
   email          String   @unique
   name           String
-  passwordHash   String?
+  passwordHash   String
   role           UserRole @default(CASHIER)
   branchId       String?
   isActive       Boolean  @default(true)
+  avatarColor    String   @default("cyan")
   lastLogin      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -82,6 +87,116 @@ model User {
   branch       Branch?       @relation(fields: [branchId], references: [id])
   salesInvoices SalesInvoice[] @relation("SalesRep")
   journalEntries JournalEntry[] @relation("CreatedBy")
+  auditLogs     AuditLog[]
+  sessions      Session[]
+}
+
+// Session-based authentication (HTTP-only cookie)
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique
+  expiresAt   DateTime
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Audit log - track every create/update/delete operation across the system
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         AuditAction
+  entity         String   // e.g., "Product", "User", "Invoice"
+  entityId       String?
+  description    String
+  metadata       String?  // JSON string of changes
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  APPROVE
+  REJECT
+}
+
+// Department (separate from Employee.department string)
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  managerId      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees     Employee[]
+}
+
+// Job Position
+model JobPosition {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  departmentId   String?
+  baseSalary     Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees     Employee[]
+}
+
+// Quotation (pre-sale) - like Odoo/SAP
+model Quotation {
+  id             String   @id @default(cuid())
+  organizationId String
+  quoteNumber    String   @unique
+  customerId     String?
+  customerName   String
+  status         QuotationStatus @default(DRAFT)
+  subtotal       Float    @default(0)
+  vatAmount      Float    @default(0)
+  grandTotal     Float    @default(0)
+  validUntil     DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  items        QuotationItem[]
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+model QuotationItem {
+  id              String @id @default(cuid())
+  quotationId     String
+  productId       String
+  quantity        Int
+  unitPrice       Float
+  vatRate         Float  @default(15.0)
+  lineTotal       Float
+
+  quotation  Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
 }
 
 enum UserRole {
@@ -135,6 +250,7 @@ model Product {
   invoiceItems InvoiceItem[]
   stockMoves   StockMovement[]
   purchaseItems PurchaseOrderItem[]
+  quotationItems QuotationItem[]
 }
 
 model StockMovement {
@@ -247,6 +363,7 @@ model Customer {
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   salesInvoices SalesInvoice[]
+  quotations   Quotation[]
 }
 
 model SalesInvoice {
@@ -388,6 +505,9 @@ model Employee {
   id             String   @id @default(cuid())
   organizationId String
   branchId       String?
+  departmentId   String?
+  jobPositionId  String?
+  userId         String?  @unique  // link to User account for login
   employeeCode   String   @unique
   fullName       String
   nationalId     String?
@@ -410,6 +530,9 @@ model Employee {
   attendance   Attendance[]
   payrollItems PayrollItem[]
   leaves       LeaveRequest[]
+  dept         Department?    @relation(fields: [departmentId], references: [id])
+  jobPosition  JobPosition?   @relation(fields: [jobPositionId], references: [id])
+  user         User?          @relation(fields: [userId], references: [id])
 }
 
 enum EmployeeStatus {
