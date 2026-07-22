@@ -11,7 +11,8 @@ import {
   FileText, LogOut, Settings, Bell, RefreshCw, ArrowDownLeft,
   ArrowUpRight, Percent, UserCheck, UserX, Coffee, ShieldAlert,
   Edit, Trash2, UserPlus, KeyRound, Eye, EyeOff, History, Save,
-  Lock, Crown, Database, Loader2,
+  Lock, Crown, Database, Loader2, Printer, Filter, Download, X,
+  Keyboard, Zap, ChevronDown, ChevronUp, Star, StarOff, MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -357,7 +358,7 @@ function AppShell() {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <header className="h-16 sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-bold">
@@ -398,8 +399,75 @@ function AppShell() {
             </motion.div>
           </AnimatePresence>
         </div>
+        {/* Status bar */}
+        <StatusBar user={user} />
       </main>
     </div>
+  );
+}
+
+// ============================================================
+// STATUS BAR - bottom strip showing live stats + clock + user
+// ============================================================
+function StatusBar({ user }: { user: any }) {
+  const [time, setTime] = useState(new Date());
+  const [stats, setStats] = useState<any>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchStats = async () => {
+      try {
+        const r = await fetch("/api/dashboard");
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!cancelled) setStats(j);
+      } catch {}
+    };
+    fetchStats();
+    const t = setInterval(fetchStats, 30000); // refresh every 30s
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  return (
+    <footer className="h-8 border-t border-border bg-sidebar/50 backdrop-blur flex items-center justify-between px-4 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-4">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-cyan" />
+          النظام يعمل
+        </span>
+        {stats && (
+          <>
+            <span className="hidden sm:flex items-center gap-1">
+              <ShoppingCart className="w-3 h-3" />
+              مبيعات اليوم: <span className="font-mono text-emerald-400">{fmtSAR(stats.today.sales)}</span>
+            </span>
+            <span className="hidden md:flex items-center gap-1">
+              <Receipt className="w-3 h-3" />
+              {stats.today.invoices} فاتورة
+            </span>
+            <span className="hidden lg:flex items-center gap-1">
+              <Boxes className="w-3 h-3" />
+              {stats.inventory.items} منتج
+            </span>
+          </>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="hidden sm:flex items-center gap-1">
+          <Database className="w-3 h-3" />
+          {user?.organizationId ? "متصل" : "غير متصل"}
+        </span>
+        <span className="flex items-center gap-1 font-mono">
+          <Clock className="w-3 h-3" />
+          {time.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </span>
+      </div>
+    </footer>
   );
 }
 
@@ -698,8 +766,24 @@ function CashierModule() {
     setShowInvoices(true);
   };
 
+  // Keyboard shortcuts for cashier: F1-F4 = payment methods, F9 = checkout, ESC = clear cart
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "F1") { e.preventDefault(); setPaymentMethod("CASH"); toast.info("طريقة الدفع: نقدي"); }
+      else if (e.key === "F2") { e.preventDefault(); setPaymentMethod("CARD"); toast.info("طريقة الدفع: بطاقة"); }
+      else if (e.key === "F3") { e.preventDefault(); setPaymentMethod("TRANSFER"); toast.info("طريقة الدفع: تحويل"); }
+      else if (e.key === "F4") { e.preventDefault(); setPaymentMethod("WALLET"); toast.info("طريقة الدفع: محفظة"); }
+      else if (e.key === "F9") { e.preventDefault(); checkout(); }
+      else if (e.key === "Escape" && cart.length > 0) {
+        if (confirm("تفريغ السلة؟")) { setCart([]); setPaidAmount(""); }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [cart, paymentMethod, paidAmount]);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-9rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-11rem)]">
       <div className="lg:col-span-2 flex flex-col">
         <Card className="bg-card border-border flex-1 flex flex-col">
           <CardHeader className="pb-3">
@@ -800,6 +884,15 @@ function CashierModule() {
                 {processing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : null}
                 {processing ? "جارٍ المعالجة..." : `إصدار الفاتورة • ${fmtSAR(total)}`}
               </Button>
+              {/* Keyboard shortcuts hint */}
+              <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground flex-wrap">
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">F1</kbd>نقدي
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">F2</kbd>بطاقة
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">F3</kbd>تحويل
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">F4</kbd>محفظة
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">F9</kbd>إصدار
+                <kbd className="px-1.5 py-0.5 rounded bg-muted/50 border border-border">ESC</kbd>تفريغ
+              </div>
             </div>
           )}
         </CardContent>
@@ -815,6 +908,10 @@ function ReceiptDialog({ receipt, onClose }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
+        <DialogHeader className="sr-only">
+          <DialogTitle>إيصال الفاتورة {receipt.number}</DialogTitle>
+          <DialogDescription>تفاصيل الفاتورة المُصدَّرة والإجراءات الأوتوماتيكية</DialogDescription>
+        </DialogHeader>
         <div className="text-center mb-4">
           <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-emerald-500/20 flex items-center justify-center">
             <CheckCircle2 className="w-8 h-8 text-emerald-400" />
@@ -852,6 +949,13 @@ function ReceiptDialog({ receipt, onClose }: any) {
             <li>✓ تسجيل العملية في سجل التدقيق</li>
           </ul>
         </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => window.print()} className="flex-1">
+            <Printer className="w-4 h-4 ml-2" />
+            طباعة
+          </Button>
+          <Button onClick={onClose} className="flex-1">إغلاق</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -861,7 +965,7 @@ function InvoicesListDialog({ invoices, onClose }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>آخر الفواتير ({invoices.length})</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>آخر الفواتير ({invoices.length})</DialogTitle><DialogDescription>استعراض سجل آخر الفواتير المُصدَّرة</DialogDescription></DialogHeader>
         <ScrollArea className="max-h-[60vh]">
           <Table>
             <TableHeader><TableRow>
@@ -1343,7 +1447,7 @@ function EmployeeFormDialog({ employee, onClose, onSaved }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>{employee ? "تعديل موظف" : "إضافة موظف جديد"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{employee ? "تعديل موظف" : "إضافة موظف جديد"}</DialogTitle><DialogDescription>{employee ? "تعديل بيانات الموظف الحالي" : "إضافة موظف جديد للمنشأة"}</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs">كود الموظف *</Label>
@@ -1629,7 +1733,7 @@ function ProductFormDialog({ product, onClose, onSaved }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>{product ? "تعديل منتج" : "إضافة منتج جديد"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{product ? "تعديل منتج" : "إضافة منتج جديد"}</DialogTitle><DialogDescription>{product ? "تعديل بيانات المنتج الحالي" : "إضافة منتج جديد للمخزون"}</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div><Label className="text-xs">SKU *</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الباركود</Label><Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="bg-muted/40 mt-1" /></div>
@@ -1684,7 +1788,7 @@ function SupplierFormDialog({ supplier, onClose, onSaved }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>{supplier ? "تعديل مورد" : "إضافة مورد جديد"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{supplier ? "تعديل مورد" : "إضافة مورد جديد"}</DialogTitle><DialogDescription>{supplier ? "تعديل بيانات المورد الحالي" : "إضافة مورد جديد لقائمة الموردين"}</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><Label className="text-xs">اسم المورد *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">مسؤول التواصل</Label><Input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} className="bg-muted/40 mt-1" /></div>
@@ -2002,7 +2106,7 @@ function UserFormDialog({ user, branches, onClose, onSaved }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{user ? "تعديل مستخدم" : "إضافة مستخدم جديد"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{user ? "تعديل مستخدم" : "إضافة مستخدم جديد"}</DialogTitle><DialogDescription>{user ? "تعديل بيانات وصلاحيات المستخدم" : "إنشاء حساب مستخدم جديد مع تحديد الدور"}</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <div><Label className="text-xs">الاسم الكامل *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">البريد الإلكتروني *</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-muted/40 mt-1" /></div>
@@ -2080,7 +2184,7 @@ function SettingsFormDialog({ org, onClose, onSaved }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>تعديل إعدادات المنشأة</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>تعديل إعدادات المنشأة</DialogTitle><DialogDescription>تحديث بيانات المنشأة الأساسية والمالية</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div><Label className="text-xs">اسم المنشأة</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الاسم القانوني</Label><Input value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} className="bg-muted/40 mt-1" /></div>
