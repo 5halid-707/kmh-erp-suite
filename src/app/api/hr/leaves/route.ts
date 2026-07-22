@@ -1,10 +1,12 @@
 // HR: leaves
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
-  const org = await getFirstOrg();
+  const auth = await requireAuth();
+  if (auth.error || !auth.user) return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  const org = { id: auth.user.organizationId };
   const leaves = await db.leaveRequest.findMany({
     where: { employee: { organizationId: org.id } },
     orderBy: { createdAt: "desc" },
@@ -21,7 +23,9 @@ export async function POST(req: NextRequest) {
     if (!employeeId || !type || !startDate || !endDate) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
-    const org = await getFirstOrg();
+    const auth = await requireAuth();
+  if (auth.error || !auth.user) return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  const org = { id: auth.user.organizationId };
     const leave = await db.leaveRequest.create({
       data: {
         employeeId,

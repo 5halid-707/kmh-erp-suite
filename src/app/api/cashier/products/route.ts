@@ -1,15 +1,23 @@
 // POS products endpoint - list products for cashier interface
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg, getMainBranch } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
-  const org = await getFirstOrg();
-  const branch = await getMainBranch();
+  const auth = await requireAuth(["ADMIN", "CASHIER", "BRANCH_MANAGER"]);
+  if (auth.error || !auth.user) {
+    return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  }
+
+  const branch = auth.user.branchId
+    ? await db.branch.findUnique({ where: { id: auth.user.branchId } })
+    : await db.branch.findFirst({ where: { organizationId: auth.user.organizationId } });
+
+  if (!branch) return NextResponse.json({ error: "لا يوجد فرع" }, { status: 404 });
 
   const products = await db.product.findMany({
     where: {
-      organizationId: org.id,
+      organizationId: auth.user.organizationId,
       branchId: branch.id,
       isActive: true,
     },

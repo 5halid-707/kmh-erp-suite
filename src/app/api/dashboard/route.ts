@@ -1,10 +1,15 @@
 // Dashboard aggregate stats API
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg, daysAgo } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
+import { daysAgo } from "@/lib/erp-helpers";
 
 export async function GET() {
-  const org = await getFirstOrg();
+  const auth = await requireAuth();
+  if (auth.error || !auth.user) {
+    return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  }
+  const org = { id: auth.user.organizationId };
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const monthStart = new Date();

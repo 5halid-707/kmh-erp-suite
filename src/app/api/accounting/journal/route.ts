@@ -1,10 +1,12 @@
 // Accounting: journal entries list with lines
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const org = await getFirstOrg();
+  const auth = await requireAuth();
+  if (auth.error || !auth.user) return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  const org = { id: auth.user.organizationId };
   const { searchParams } = new URL(req.url);
   const limit = parseInt(searchParams.get("limit") || "30", 10);
 

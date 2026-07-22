@@ -89,6 +89,7 @@ model User {
   journalEntries JournalEntry[] @relation("CreatedBy")
   auditLogs     AuditLog[]
   sessions      Session[]
+  employee      Employee?    @relation("EmployeeUser")
 }
 
 // Session-based authentication (HTTP-only cookie)
@@ -532,7 +533,7 @@ model Employee {
   leaves       LeaveRequest[]
   dept         Department?    @relation(fields: [departmentId], references: [id])
   jobPosition  JobPosition?   @relation(fields: [jobPositionId], references: [id])
-  user         User?          @relation(fields: [userId], references: [id])
+  user         User?          @relation("EmployeeUser", fields: [userId], references: [id])
 }
 
 enum EmployeeStatus {

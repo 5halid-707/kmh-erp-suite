@@ -1,10 +1,12 @@
 // ERP: products + inventory + categories
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
-  const org = await getFirstOrg();
+  const auth = await requireAuth();
+  if (auth.error || !auth.user) return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  const org = { id: auth.user.organizationId };
 
   const [products, categories] = await Promise.all([
     db.product.findMany({

@@ -2,7 +2,8 @@
 // Cross-module automation: Sale → Journal Entry → (COGS entry) → stock movement
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getFirstOrg, getMainBranch } from "@/lib/erp-helpers";
+import { requireAuth } from "@/lib/auth";
+import { logAction } from "@/lib/audit";
 
 interface CheckoutItem {
   productId: string;
@@ -20,19 +21,28 @@ interface CheckoutBody {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(["ADMIN", "CASHIER", "BRANCH_MANAGER"]);
+  if (auth.error || !auth.user) {
+    return NextResponse.json({ error: "غير مصرّح" }, { status: auth.status });
+  }
   try {
     const body = (await req.json()) as CheckoutBody;
     if (!body.items || body.items.length === 0) {
       return NextResponse.json({ error: "السلة فارغة" }, { status: 400 });
     }
 
-    const org = await getFirstOrg();
-    const branch = await getMainBranch();
+    const orgId = auth.user.organizationId;
+    const org = await db.organization.findUnique({ where: { id: orgId } });
+    if (!org) return NextResponse.json({ error: "المنشأة غير موجودة" }, { status: 500 });
+    const branch = auth.user.branchId
+      ? await db.branch.findUnique({ where: { id: auth.user.branchId } })
+      : await db.branch.findFirst({ where: { organizationId: orgId } });
+    if (!branch) return NextResponse.json({ error: "لا يوجد فرع" }, { status: 500 });
 
     // Validate all products
     const productIds = body.items.map((i) => i.productId);
     const products = await db.product.findMany({
-      where: { id: { in: productIds }, organizationId: org.id },
+      where: { id: { in: productIds }, organizationId: orgId },
     });
 
     if (products.length !== productIds.length) {
@@ -73,24 +83,20 @@ export async function POST(req: NextRequest) {
       : 1001;
     const invoiceNumber = `INV-${year}-${String(nextNum).padStart(5, "0")}`;
 
-    // Find cashier user (first user with CASHIER role)
-    const cashier = body.salesRepId
-      ? await db.user.findUnique({ where: { id: body.salesRepId } })
-      : await db.user.findFirst({
-          where: { organizationId: org.id, role: "CASHIER" },
-        });
+    // The logged-in user is the sales rep
+    const salesRepUser = auth.user;
+    const adminUser = auth.user; // for journal entry createdBy
 
     // Get accounting references
-    const [cashAccount, salesAccount, vatAccount, cogsAccount, invAccount, adminUser] = await Promise.all([
-      db.account.findFirst({ where: { organizationId: org.id, code: "1101" } }),
-      db.account.findFirst({ where: { organizationId: org.id, code: "4100" } }),
-      db.account.findFirst({ where: { organizationId: org.id, code: "2200" } }),
-      db.account.findFirst({ where: { organizationId: org.id, code: "5000" } }),
-      db.account.findFirst({ where: { organizationId: org.id, code: "1300" } }),
-      db.user.findFirst({ where: { organizationId: org.id, role: "ADMIN" } }),
+    const [cashAccount, salesAccount, vatAccount, cogsAccount, invAccount] = await Promise.all([
+      db.account.findFirst({ where: { organizationId: orgId, code: "1101" } }),
+      db.account.findFirst({ where: { organizationId: orgId, code: "4100" } }),
+      db.account.findFirst({ where: { organizationId: orgId, code: "2200" } }),
+      db.account.findFirst({ where: { organizationId: orgId, code: "5000" } }),
+      db.account.findFirst({ where: { organizationId: orgId, code: "1300" } }),
     ]);
 
-    if (!cashAccount || !salesAccount || !vatAccount || !cogsAccount || !invAccount || !adminUser) {
+    if (!cashAccount || !salesAccount || !vatAccount || !cogsAccount || !invAccount) {
       return NextResponse.json({ error: "إعداد دليل الحسابات غير مكتمل" }, { status: 500 });
     }
 
@@ -99,11 +105,11 @@ export async function POST(req: NextRequest) {
       // 1) Create the invoice
       const invoice = await tx.salesInvoice.create({
         data: {
-          organizationId: org.id,
+          organizationId: orgId,
           branchId: branch.id,
           invoiceNumber,
           customerId: body.customerId || null,
-          salesRepId: cashier?.id || adminUser.id,
+          salesRepId: salesRepUser.id,
           status: "COMPLETED",
           paymentMethod: body.paymentMethod,
           subtotal,
@@ -132,7 +138,7 @@ export async function POST(req: NextRequest) {
       const entryNumber = `JE-${year}-${String(jeCount + 1).padStart(5, "0")}`;
       await tx.journalEntry.create({
         data: {
-          organizationId: org.id,
+          organizationId: orgId,
           entryNumber,
           reference: invoiceNumber,
           description: `قيد مبيعات فاتورة ${invoiceNumber}`,
@@ -157,7 +163,7 @@ export async function POST(req: NextRequest) {
       if (totalCost > 0) {
         await tx.journalEntry.create({
           data: {
-            organizationId: org.id,
+            organizationId: orgId,
             entryNumber: `JE-${year}-${String(jeCount + 2).padStart(5, "0")}-COGS`,
             reference: invoiceNumber,
             description: `قيد تكلفة بضاعة مباعة - فاتورة ${invoiceNumber}`,
@@ -181,7 +187,7 @@ export async function POST(req: NextRequest) {
       for (const li of lineItems) {
         await tx.stockMovement.create({
           data: {
-            organizationId: org.id,
+            organizationId: orgId,
             branchId: branch.id,
             productId: li.productId,
             type: "SALE_OUT",
@@ -226,6 +232,23 @@ export async function POST(req: NextRequest) {
       }
 
       return invoice;
+    });
+
+    // Audit log
+    await logAction({
+      organizationId: orgId,
+      userId: auth.user.id,
+      action: "CREATE",
+      entity: "SalesInvoice",
+      entityId: result.id,
+      description: `فاتورة بيع ${result.invoiceNumber} بقيمة ${grandTotal.toFixed(2)} ${org.currency} (${body.paymentMethod})`,
+      metadata: {
+        invoiceNumber: result.invoiceNumber,
+        total: grandTotal,
+        paymentMethod: body.paymentMethod,
+        itemsCount: lineItems.length,
+      },
+      ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
     });
 
     return NextResponse.json({
