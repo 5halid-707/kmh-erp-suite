@@ -68,11 +68,11 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   ADMIN: ["*"],
-  ACCOUNTANT: ["dashboard", "cashier", "accounting", "hr.view", "erp.view", "reports"],
-  HR_MANAGER: ["dashboard", "hr", "erp.view", "reports"],
-  CASHIER: ["dashboard", "cashier", "erp.view"],
-  INVENTORY_MANAGER: ["dashboard", "erp", "reports"],
-  BRANCH_MANAGER: ["dashboard", "cashier", "hr.view", "erp.view", "reports"],
+  ACCOUNTANT: ["dashboard", "cashier", "customers", "accounting", "hr.view", "erp.view", "reports"],
+  HR_MANAGER: ["dashboard", "customers", "hr", "erp.view", "reports"],
+  CASHIER: ["dashboard", "cashier", "customers", "erp.view"],
+  INVENTORY_MANAGER: ["dashboard", "customers", "erp", "reports"],
+  BRANCH_MANAGER: ["dashboard", "cashier", "customers", "hr.view", "erp.view", "reports"],
 };
 
 function hasPermission(role: string, perm: string): boolean {
@@ -260,7 +260,7 @@ function LoginScreen() {
 // ============================================================
 // APP SHELL - main layout after login
 // ============================================================
-type ModuleKey = "dashboard" | "cashier" | "accounting" | "hr" | "erp" | "admin";
+type ModuleKey = "dashboard" | "cashier" | "accounting" | "hr" | "erp" | "admin" | "reports" | "customers";
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -278,9 +278,11 @@ function AppShell() {
   const modules: { key: ModuleKey; label: string; icon: any; color: string; perm: string }[] = [
     { key: "dashboard", label: "لوحة التحكم", icon: LayoutDashboard, color: "text-cyan-400", perm: "dashboard" },
     { key: "cashier", label: "نقطة البيع", icon: ShoppingCart, color: "text-emerald-400", perm: "cashier" },
+    { key: "customers", label: "العملاء", icon: UserCheck, color: "text-blue-400", perm: "customers" },
     { key: "accounting", label: "المحاسبة", icon: Calculator, color: "text-amber-400", perm: "accounting" },
     { key: "hr", label: "الموارد البشرية", icon: Users, color: "text-purple-400", perm: "hr" },
     { key: "erp", label: "إدارة المخزون", icon: Package, color: "text-rose-400", perm: "erp" },
+    { key: "reports", label: "التقارير", icon: TrendingUp, color: "text-indigo-400", perm: "reports" },
     { key: "admin", label: "لوحة الإدارة", icon: ShieldCheck, color: "text-yellow-400", perm: "admin" },
   ].filter((m) => hasPermission(user.role, m.perm));
 
@@ -422,9 +424,11 @@ function AppShell() {
             >
               {active === "dashboard" && <DashboardModule />}
               {active === "cashier" && <CashierModule />}
+              {active === "customers" && <CustomersModule />}
               {active === "accounting" && <AccountingModule />}
               {active === "hr" && <HRModule />}
               {active === "erp" && <ERPModule />}
+              {active === "reports" && <ReportsModule />}
               {active === "admin" && <AdminModule />}
             </motion.div>
           </AnimatePresence>
@@ -627,6 +631,49 @@ function DashboardModule() {
               <div className="col-span-5 text-center text-muted-foreground py-6 text-sm">لا توجد سجلات حضور لليوم بعد</div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Activity Timeline */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="w-4 h-4 text-cyan-400" />
+            آخر النشاطات
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="max-h-72">
+            <div className="space-y-2">
+              {data.recentActivity && data.recentActivity.length > 0 ? data.recentActivity.map((log: any) => (
+                <div key={log.id} className="flex items-start gap-3 py-2 border-b border-border/40 last:border-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    log.action === "CREATE" ? "bg-emerald-400/15 text-emerald-400" :
+                    log.action === "UPDATE" ? "bg-amber-400/15 text-amber-400" :
+                    log.action === "DELETE" ? "bg-rose-400/15 text-rose-400" :
+                    log.action === "LOGIN" ? "bg-cyan-400/15 text-cyan-400" :
+                    "bg-muted text-muted-foreground"
+                  }`}>
+                    {log.action === "CREATE" ? <Plus className="w-4 h-4" /> :
+                     log.action === "UPDATE" ? <Edit className="w-4 h-4" /> :
+                     log.action === "DELETE" ? <Trash2 className="w-4 h-4" /> :
+                     log.action === "LOGIN" ? <UserCheck className="w-4 h-4" /> :
+                     <Activity className="w-4 h-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{log.description}</div>
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                      <span>{log.userName}</span>
+                      <span>•</span>
+                      <span>{new Date(log.createdAt).toLocaleString("ar-SA", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</span>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center text-muted-foreground py-6 text-sm">لا توجد نشاطات بعد</div>
+              )}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
     </div>
@@ -1026,6 +1073,360 @@ function InvoicesListDialog({ invoices, onClose }: any) {
 }
 
 // ============================================================
+// CUSTOMERS MODULE - customer management with loyalty + balance
+// ============================================================
+function CustomersModule() {
+  const { user } = useAuth();
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<any | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const canEdit = user && (user.role === "ADMIN" || user.role === "CASHIER" || user.role === "ACCOUNTANT" || user.role === "BRANCH_MANAGER");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/customers");
+      const j = await r.json();
+      setCustomers(j.customers || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => { if (!cancelled) await load(); })();
+    return () => { cancelled = true; };
+  }, [load]);
+
+  const deleteCustomer = async (id: string, name: string) => {
+    if (!confirm(`حذف العميل "${name}"؟`)) return;
+    const r = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+    if (r.ok) { toast.success("تم حذف العميل"); load(); }
+    else { const j = await r.json(); toast.error(j.error); }
+  };
+
+  const filtered = customers.filter((c) => !search || c.name.includes(search) || c.phone?.includes(search));
+
+  if (loading) return <SkeletonRow />;
+
+  // Stats
+  const totalCreditLimit = customers.reduce((s, c) => s + (c.creditLimit || 0), 0);
+  const totalBalanceDue = customers.reduce((s, c) => s + (c.balanceDue || 0), 0);
+  const totalLoyaltyPoints = customers.reduce((s, c) => s + (c.loyaltyPoints || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">إجمالي العملاء</div><div className="text-2xl font-bold">{customers.length}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">حد الائتمان الكلي</div><div className="text-2xl font-bold text-cyan-400">{fmtSAR(totalCreditLimit)}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">مستحقات العملاء</div><div className="text-2xl font-bold text-amber-400">{fmtSAR(totalBalanceDue)}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">نقاط الولاء</div><div className="text-2xl font-bold text-purple-400">{totalLoyaltyPoints.toLocaleString("ar-SA")}</div></CardContent></Card>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="ابحث بالاسم أو الهاتف..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10 bg-muted/40" />
+        </div>
+        {canEdit && (
+          <Button onClick={() => { setEditing(null); setShowForm(true); }}>
+            <UserPlus className="w-4 h-4 ml-2" />إضافة عميل
+          </Button>
+        )}
+      </div>
+
+      {/* Customers grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filtered.map((c) => (
+          <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold">
+                    {c.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">{c.name}</div>
+                    <div className="text-[10px] text-muted-foreground">{c.city || "—"}</div>
+                  </div>
+                </div>
+                {canEdit && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7"><Settings className="w-4 h-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => { setEditing(c); setShowForm(true); }}>
+                        <Edit className="w-3 h-3 ml-2" /> تعديل
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-rose-400" onClick={() => deleteCustomer(c.id, c.name)}>
+                        <Trash2 className="w-3 h-3 ml-2" /> حذف
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2 text-muted-foreground"><Phone className="w-3 h-3" /> {c.phone || "—"}</div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Mail className="w-3 h-3" /> {c.email || "—"}</div>
+              </div>
+              <Separator className="my-3" />
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-sm font-bold text-cyan-400">{fmtShort(c.creditLimit || 0)}</div>
+                  <div className="text-[9px] text-muted-foreground">حد الائتمان</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-amber-400">{fmtShort(c.balanceDue || 0)}</div>
+                  <div className="text-[9px] text-muted-foreground">مستحق</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-purple-400">{c.loyaltyPoints || 0}</div>
+                  <div className="text-[9px] text-muted-foreground">نقاط ولاء</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {showForm && (
+        <CustomerFormDialog customer={editing} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
+      )}
+    </div>
+  );
+}
+
+function CustomerFormDialog({ customer, onClose, onSaved }: any) {
+  const [form, setForm] = useState({
+    name: customer?.name || "",
+    phone: customer?.phone || "",
+    email: customer?.email || "",
+    taxNumber: customer?.taxNumber || "",
+    address: customer?.address || "",
+    city: customer?.city || "",
+    creditLimit: customer?.creditLimit || 0,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!form.name) { toast.error("الاسم مطلوب"); return; }
+    setSaving(true);
+    try {
+      const url = customer ? `/api/customers/${customer.id}` : "/api/customers";
+      const method = customer ? "PATCH" : "POST";
+      const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      toast.success(customer ? "تم تحديث العميل" : "تمت إضافة العميل");
+      onSaved();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{customer ? "تعديل عميل" : "إضافة عميل جديد"}</DialogTitle>
+          <DialogDescription>{customer ? "تعديل بيانات العميل" : "إضافة عميل جديد لقائمة العملاء"}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div><Label className="text-xs">الاسم *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-muted/40 mt-1" /></div>
+            <div><Label className="text-xs">المدينة</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="bg-muted/40 mt-1" /></div>
+          </div>
+          <div><Label className="text-xs">البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">الرقم الضريبي</Label><Input value={form.taxNumber} onChange={(e) => setForm({ ...form, taxNumber: e.target.value })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">العنوان</Label><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="bg-muted/40 mt-1" rows={2} /></div>
+          <div><Label className="text-xs">حد الائتمان (ر.س)</Label><Input type="number" value={form.creditLimit} onChange={(e) => setForm({ ...form, creditLimit: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
+            حفظ
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// REPORTS MODULE - comprehensive analytics & exportable reports
+// ============================================================
+function ReportsModule() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch("/api/reports");
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!cancelled) setData(j);
+      } catch {}
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading || !data) return <SkeletonRow />;
+
+  const exportCSV = (filename: string, rows: any[], headers: string[]) => {
+    const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => `"${r[h] ?? ""}"`).join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`تم تصدير ${filename}.csv`);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Profit Analysis */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات</div><div className="text-xl font-bold text-emerald-400">{fmtSAR(data.profitAnalysis.totalRevenue)}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">تكلفة المبيعات</div><div className="text-xl font-bold text-rose-400">{fmtSAR(data.profitAnalysis.totalCOGS)}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">إجمالي الربح</div><div className="text-xl font-bold text-cyan-400">{fmtSAR(data.profitAnalysis.grossProfit)}</div></CardContent></Card>
+        <Card className="bg-card border-border"><CardContent className="p-4"><div className="text-xs text-muted-foreground mb-1">هامش الربح %</div><div className="text-xl font-bold text-amber-400">{data.profitAnalysis.grossMargin}%</div></CardContent></Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Products */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2"><Package className="w-4 h-4 text-cyan-400" />أعلى المنتجات مبيعًا</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => exportCSV("top-products", data.topProducts, ["name", "sku", "qty", "revenue"])}>
+                <Download className="w-3 h-3 ml-1.5" />CSV
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="max-h-72">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>#</TableHead><TableHead>المنتج</TableHead>
+                  <TableHead className="text-center">كمية</TableHead>
+                  <TableHead className="text-left">إيراد</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {data.topProducts.map((p: any, i: number) => (
+                    <TableRow key={p.sku}>
+                      <TableCell className="font-bold text-cyan-400">{i + 1}</TableCell>
+                      <TableCell><div className="font-medium text-sm">{p.name}</div><div className="text-[10px] text-muted-foreground font-mono">{p.sku}</div></TableCell>
+                      <TableCell className="text-center">{p.qty}</TableCell>
+                      <TableCell className="text-left font-bold text-emerald-400">{fmtSAR(p.revenue)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* Top Customers */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2"><UserCheck className="w-4 h-4 text-blue-400" />أعلى العملاء</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => exportCSV("top-customers", data.topCustomers, ["name", "phone", "invoices", "total"])}>
+                <Download className="w-3 h-3 ml-1.5" />CSV
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="max-h-72">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>#</TableHead><TableHead>العميل</TableHead>
+                  <TableHead className="text-center">فواتير</TableHead>
+                  <TableHead className="text-left">إجمالي</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {data.topCustomers.map((c: any, i: number) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-bold text-blue-400">{i + 1}</TableCell>
+                      <TableCell><div className="font-medium text-sm">{c.name}</div><div className="text-[10px] text-muted-foreground font-mono">{c.phone}</div></TableCell>
+                      <TableCell className="text-center">{c.invoices}</TableCell>
+                      <TableCell className="text-left font-bold text-emerald-400">{fmtSAR(c.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sales by Category */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2"><Boxes className="w-4 h-4 text-purple-400" />المبيعات حسب الفئة</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => exportCSV("sales-by-category", data.salesByCategory, ["name", "qty", "revenue"])}>
+              <Download className="w-3 h-3 ml-1.5" />CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {data.salesByCategory.map((cat: any, i: number) => {
+              const maxRev = Math.max(...data.salesByCategory.map((c: any) => c.revenue), 1);
+              const pct = (cat.revenue / maxRev) * 100;
+              const colors = ["#00a8e8", "#10b981", "#f59e0b", "#a855f7", "#ef4444", "#6366f1"];
+              return (
+                <div key={cat.name}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
+                      {cat.name}
+                      <span className="text-muted-foreground">({cat.qty} قطعة)</span>
+                    </span>
+                    <span className="font-bold">{fmtSAR(cat.revenue)}</span>
+                  </div>
+                  <Progress value={pct} className="h-2" style={{ backgroundColor: colors[i % colors.length] + "30" } as any} />
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment Methods */}
+      <Card className="bg-card border-border">
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-amber-400" />طرق الدفع</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {data.paymentBreakdown.map((p: any) => (
+              <div key={p.paymentMethod} className="text-center p-3 rounded-lg bg-muted/30 border border-border/50">
+                <div className="text-xl font-bold">{p._count}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">{paymentLabel(p.paymentMethod)}</div>
+                <div className="text-xs font-bold text-emerald-400 mt-1">{fmtSAR(p._sum.grandTotal || 0)}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
 // ACCOUNTING MODULE
 // ============================================================
 function AccountingModule() {
@@ -1066,6 +1467,7 @@ function AccountingModule() {
         <TabsList className="bg-muted/40">
           <TabsTrigger value="trial">ميزان المراجعة</TabsTrigger>
           <TabsTrigger value="income">قائمة الدخل</TabsTrigger>
+          <TabsTrigger value="balance">الميزانية العمومية</TabsTrigger>
           <TabsTrigger value="journal">اليومية</TabsTrigger>
           <TabsTrigger value="chart">دليل الحسابات</TabsTrigger>
         </TabsList>
@@ -1122,6 +1524,69 @@ function AccountingModule() {
               <Row label="(−) ضريبة الدخل (20%)" value={`(${fmtSAR(netProfit * 0.2)})`} negative />
               <Separator />
               <Row label="صافي الربح بعد الضريبة" value={fmtSAR(netProfit * 0.8)} bold positive={netProfit > 0} large />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="balance">
+          <Card className="bg-card border-border">
+            <CardHeader><CardTitle className="text-base">الميزانية العمومية — {new Date().toLocaleDateString("ar-SA", { month: "long", year: "numeric" })}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {(() => {
+                const assets = accounts.filter((a) => a.type === "ASSET" && !a.isGroup);
+                const liabilities = accounts.filter((a) => a.type === "LIABILITY" && !a.isGroup);
+                const equity = accounts.filter((a) => a.type === "EQUITY" && !a.isGroup);
+                const totalAssets = assets.reduce((s, a) => s + a.balance, 0);
+                const totalLiabilities = liabilities.reduce((s, a) => s + a.balance, 0);
+                const totalEquity = equity.reduce((s, a) => s + a.balance, 0);
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="text-sm font-bold text-cyan-400 flex items-center gap-2"><Wallet className="w-4 h-4" />الأصول</div>
+                      {assets.map((a) => (
+                        <div key={a.code} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50">
+                          <span>{a.name}</span>
+                          <span className="font-mono font-bold">{fmtSAR(a.balance)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-sm font-bold text-cyan-400 pt-2 border-t-2 border-cyan-400/30">
+                        <span>إجمالي الأصول</span>
+                        <span className="font-mono">{fmtSAR(totalAssets)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="text-sm font-bold text-rose-400 flex items-center gap-2"><TrendingDown className="w-4 h-4" />الالتزامات</div>
+                      {liabilities.map((a) => (
+                        <div key={a.code} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50">
+                          <span>{a.name}</span>
+                          <span className="font-mono font-bold">{fmtSAR(a.balance)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-sm font-bold text-rose-400 pt-2 border-t-2 border-rose-400/30">
+                        <span>إجمالي الالتزامات</span>
+                        <span className="font-mono">{fmtSAR(totalLiabilities)}</span>
+                      </div>
+                      <div className="text-sm font-bold text-emerald-400 flex items-center gap-2 pt-2"><Crown className="w-4 h-4" />حقوق الملكية</div>
+                      {equity.map((a) => (
+                        <div key={a.code} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50">
+                          <span>{a.name}</span>
+                          <span className="font-mono font-bold">{fmtSAR(a.balance)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-sm font-bold text-emerald-400 pt-2 border-t-2 border-emerald-400/30">
+                        <span>إجمالي حقوق الملكية</span>
+                        <span className="font-mono">{fmtSAR(totalEquity)}</span>
+                      </div>
+                      <div className={`flex items-center justify-between text-sm font-bold pt-2 border-t-2 border-primary/30 ${totalAssets === (totalLiabilities + totalEquity) ? "text-emerald-400" : "text-amber-400"}`}>
+                        <span>إجمالي الالتزامات + حقوق الملكية</span>
+                        <span className="font-mono">{fmtSAR(totalLiabilities + totalEquity)}</span>
+                      </div>
+                      {totalAssets === (totalLiabilities + totalEquity) && (
+                        <div className="text-[10px] text-emerald-400 text-center">✓ الميزانية متوازنة</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1560,11 +2025,11 @@ function EmployeeFormDialog({ employee, onClose, onSaved }: any) {
           </div>
           <div>
             <Label className="text-xs">الراتب الأساسي</Label>
-            <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" />
+            <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" />
           </div>
           <div>
             <Label className="text-xs">البدلات</Label>
-            <Input type="number" value={form.allowances} onChange={(e) => setForm({ ...form, allowances: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" />
+            <Input type="number" value={form.allowances} onChange={(e) => setForm({ ...form, allowances: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" />
           </div>
           <div className="col-span-2">
             <Label className="text-xs">تاريخ التعيين</Label>
@@ -1591,6 +2056,7 @@ function ERPModule() {
   const [tab, setTab] = useState("inventory");
   const [data, setData] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
   const [pos, setPos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
@@ -1603,14 +2069,16 @@ function ERPModule() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [inv, sup, po] = await Promise.all([
+      const [inv, sup, po, mov] = await Promise.all([
         fetch("/api/erp/products").then((r) => r.json()),
         fetch("/api/suppliers").then((r) => r.json()),
         fetch("/api/erp/purchase-orders").then((r) => r.json()),
+        fetch("/api/stock-movements").then((r) => r.json()),
       ]);
       setData(inv);
       setSuppliers(sup.suppliers || []);
       setPos(po.purchaseOrders || []);
+      setMovements(mov.movements || []);
     } catch {}
     setLoading(false);
   }, []);
@@ -1649,6 +2117,7 @@ function ERPModule() {
         <TabsList className="bg-muted/40">
           <TabsTrigger value="inventory">المخزون ({data.products.length})</TabsTrigger>
           <TabsTrigger value="suppliers">الموردون ({suppliers.length})</TabsTrigger>
+          <TabsTrigger value="movements">حركات المخزون</TabsTrigger>
           <TabsTrigger value="purchase">أوامر الشراء ({pos.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="inventory">
@@ -1755,6 +2224,55 @@ function ERPModule() {
               ))}
             </div>
           </div>
+        </TabsContent>
+        <TabsContent value="movements">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                حركات المخزون ({movements.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="max-h-[60vh]">
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>التاريخ</TableHead>
+                    <TableHead>النوع</TableHead>
+                    <TableHead>المنتج</TableHead>
+                    <TableHead className="text-center">الكمية</TableHead>
+                    <TableHead>المرجع</TableHead>
+                    <TableHead>الفرع</TableHead>
+                    <TableHead>ملاحظات</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {movements.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">لا توجد حركات مخزون بعد</TableCell></TableRow>
+                    ) : movements.map((m) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-[10px] font-mono">{new Date(m.createdAt).toLocaleString("ar-SA")}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] ${["PURCHASE_IN", "RETURN_IN", "ADJUSTMENT_IN", "TRANSFER_IN"].includes(m.type) ? "text-emerald-400 border-emerald-400/30" : "text-rose-400 border-rose-400/30"}`}>
+                            {stockMoveLabel(m.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-sm">{m.product}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{m.sku}</div>
+                        </TableCell>
+                        <TableCell className={`text-center font-bold ${["PURCHASE_IN", "RETURN_IN", "ADJUSTMENT_IN", "TRANSFER_IN"].includes(m.type) ? "text-emerald-400" : "text-rose-400"}`}>
+                          {["PURCHASE_IN", "RETURN_IN", "ADJUSTMENT_IN", "TRANSFER_IN"].includes(m.type) ? "+" : "−"}{m.quantity}
+                        </TableCell>
+                        <TableCell className="text-[10px] font-mono">{m.reference || "—"}</TableCell>
+                        <TableCell className="text-xs">{m.branch}</TableCell>
+                        <TableCell className="text-[10px] text-muted-foreground">{m.notes || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="purchase">
           <Card className="bg-card border-border">
@@ -1881,10 +2399,10 @@ function ProductFormDialog({ product, onClose, onSaved }: any) {
           <div><Label className="text-xs">الباركود</Label><Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div className="col-span-2"><Label className="text-xs">الاسم *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الوحدة</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="bg-muted/40 mt-1" /></div>
-          <div><Label className="text-xs">الحد الأدنى للإعادة</Label><Input type="number" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: parseInt(e.target.value) })} className="bg-muted/40 mt-1" /></div>
-          <div><Label className="text-xs">سعر التكلفة</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" /></div>
-          <div><Label className="text-xs">سعر البيع *</Label><Input type="number" value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" /></div>
-          <div><Label className="text-xs">نسبة الضريبة %</Label><Input type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">الحد الأدنى للإعادة</Label><Input type="number" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: parseInt(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">سعر التكلفة</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">سعر البيع *</Label><Input type="number" value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">نسبة الضريبة %</Label><Input type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
           <div className="col-span-2"><Label className="text-xs">الوصف</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-muted/40 mt-1" rows={2} /></div>
         </div>
         <DialogFooter>
@@ -2446,7 +2964,7 @@ function SettingsFormDialog({ org, onClose, onSaved }: any) {
           <div><Label className="text-xs">اسم المنشأة</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الاسم القانوني</Label><Input value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الرقم الضريبي</Label><Input value={form.taxNumber} onChange={(e) => setForm({ ...form, taxNumber: e.target.value })} className="bg-muted/40 mt-1" /></div>
-          <div><Label className="text-xs">نسبة الضريبة (%)</Label><Input type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: parseFloat(e.target.value) })} className="bg-muted/40 mt-1" /></div>
+          <div><Label className="text-xs">نسبة الضريبة (%)</Label><Input type="number" value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: parseFloat(e.target.value) || 0 })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">المدينة</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="bg-muted/40 mt-1" /></div>
@@ -2519,6 +3037,15 @@ function leaveStatusLabel(s: string): string {
 function auditActionLabel(a: string): string {
   const map: any = { CREATE: "إنشاء", UPDATE: "تحديث", DELETE: "حذف", LOGIN: "دخول", LOGOUT: "خروج", APPROVE: "اعتماد", REJECT: "رفض" };
   return map[a] || a;
+}
+
+function stockMoveLabel(s: string): string {
+  const map: any = {
+    PURCHASE_IN: "وارد (شراء)", SALE_OUT: "صادر (بيع)", RETURN_IN: "مرتجع عميل",
+    RETURN_OUT: "مرتجع مزود", ADJUSTMENT_IN: "تسوية (+)", ADJUSTMENT_OUT: "تسوية (−)",
+    TRANSFER_IN: "تحويل وارد", TRANSFER_OUT: "تحويل صادر",
+  };
+  return map[s] || s;
 }
 
 function Trophy(props: any) {

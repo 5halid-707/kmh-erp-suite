@@ -150,6 +150,14 @@ export async function GET() {
     },
   });
 
+  // Recent audit log (activity timeline)
+  const recentActivity = await db.auditLog.findMany({
+    where: { organizationId: org.id },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    include: { user: { select: { name: true } } },
+  });
+
   return NextResponse.json({
     today: {
       sales: todaySales._sum.grandTotal || 0,
@@ -180,5 +188,13 @@ export async function GET() {
     topProducts,
     paymentMethods: payMethodRaw,
     recentInvoices,
+    recentActivity: recentActivity.map((log) => ({
+      id: log.id,
+      action: log.action,
+      entity: log.entity,
+      description: log.description,
+      createdAt: log.createdAt,
+      userName: log.user?.name || "النظام",
+    })),
   });
 }
