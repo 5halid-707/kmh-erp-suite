@@ -13,6 +13,7 @@ import {
   Edit, Trash2, UserPlus, KeyRound, Eye, EyeOff, History, Save,
   Lock, Crown, Database, Loader2, Printer, Filter, Download, X,
   Keyboard, Zap, ChevronDown, ChevronUp, Star, StarOff, MoreHorizontal,
+  Upload, Image as ImageIcon, FileX, UserCog, Key, PowerOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -265,8 +266,14 @@ function AppShell() {
   const { user, logout } = useAuth();
   const [active, setActive] = useState<ModuleKey>("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   if (!user) return null;
+
+  const handleModuleClick = (key: ModuleKey) => {
+    setActive(key);
+    setMobileSidebarOpen(false);
+  };
 
   const modules: { key: ModuleKey; label: string; icon: any; color: string; perm: string }[] = [
     { key: "dashboard", label: "لوحة التحكم", icon: LayoutDashboard, color: "text-cyan-400", perm: "dashboard" },
@@ -288,8 +295,15 @@ function AppShell() {
 
   return (
     <div className="min-h-screen bg-background cyber-grid flex" dir="rtl">
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden" onClick={() => setMobileSidebarOpen(false)} />
+      )}
+
       <aside
-        className={`${sidebarCollapsed ? "w-20" : "w-72"} shrink-0 bg-sidebar border-l border-sidebar-border flex flex-col transition-all duration-300 sticky top-0 h-screen`}
+        className={`${sidebarCollapsed ? "w-20" : "w-72"} ${
+          mobileSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        } fixed lg:sticky top-0 right-0 z-50 lg:z-auto shrink-0 bg-sidebar border-l border-sidebar-border flex flex-col transition-all duration-300 h-screen`}
       >
         <div className="h-20 flex items-center gap-3 px-5 border-b border-sidebar-border">
           <div className="w-10 h-10 shrink-0 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center font-extrabold text-white text-lg glow-primary">
@@ -301,6 +315,14 @@ function AppShell() {
               <div className="text-[10px] text-muted-foreground truncate">نظام الإدارة المتكامل</div>
             </div>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden h-8 w-8"
+            onClick={() => setMobileSidebarOpen(false)}
+          >
+            <X className="w-4 h-4" />
+          </Button>
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -309,7 +331,7 @@ function AppShell() {
             const isActive = active === m.key;
             return (
               <button
-                key={m.key} onClick={() => setActive(m.key)}
+                key={m.key} onClick={() => handleModuleClick(m.key)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive ? "bg-primary/15 text-primary" : "text-sidebar-foreground hover:bg-sidebar-accent"
                 }`}
@@ -344,7 +366,7 @@ function AppShell() {
                 <span className="text-[10px] text-muted-foreground font-mono">{user.email}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+              <DropdownMenuItem onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="hidden lg:flex">
                 <Settings className="w-4 h-4 ml-2" />
                 {sidebarCollapsed ? "توسيع القائمة" : "طيّ القائمة"}
               </DropdownMenuItem>
@@ -359,31 +381,39 @@ function AppShell() {
       </aside>
 
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <header className="h-16 sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border flex items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold">
+        <header className="h-16 sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border flex items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setMobileSidebarOpen(true)}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+            </Button>
+            <h1 className="text-base sm:text-lg font-bold">
               {modules.find((m) => m.key === active)?.label}
             </h1>
-            <Badge variant="outline" className="text-cyan-400 border-cyan-400/30 bg-cyan-400/5">
+            <Badge variant="outline" className="text-cyan-400 border-cyan-400/30 bg-cyan-400/5 hidden sm:flex">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 pulse-cyan ml-1.5" />
               مباشر
             </Badge>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-[10px]">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Badge variant="outline" className="text-[10px] hidden sm:flex">
               <Crown className="w-3 h-3 ml-1 text-amber-400" />
               {ROLE_LABELS[user.role]}
             </Badge>
             <Button variant="ghost" size="icon" className="text-muted-foreground">
               <Bell className="w-5 h-5" />
             </Button>
-            <div className="text-sm text-muted-foreground hidden md:block">
+            <div className="text-xs sm:text-sm text-muted-foreground hidden md:block">
               {new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 p-6 overflow-x-hidden">
+        <div className="flex-1 p-3 sm:p-4 lg:p-6 overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={active}
@@ -783,8 +813,8 @@ function CashierModule() {
   }, [cart, paymentMethod, paidAmount]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-11rem)]">
-      <div className="lg:col-span-2 flex flex-col">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4 h-[calc(100vh-11rem)]">
+      <div className="lg:col-span-2 flex flex-col min-h-0">
         <Card className="bg-card border-border flex-1 flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
@@ -803,11 +833,15 @@ function CashierModule() {
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
                   {filtered.map((p) => (
                     <button key={p.id} onClick={() => addToCart(p)} className="group text-right p-3 rounded-lg bg-muted/30 border border-border/50 hover:border-primary/60 hover:bg-primary/5 transition-all">
-                      <div className="aspect-square mb-2 rounded-md bg-gradient-to-br from-cyan-500/20 to-purple-600/20 flex items-center justify-center">
-                        <Barcode className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <div className="aspect-square mb-2 rounded-md bg-gradient-to-br from-cyan-500/20 to-purple-600/20 flex items-center justify-center overflow-hidden">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        ) : (
+                          <Barcode className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                        )}
                       </div>
                       <div className="text-xs font-medium line-clamp-2 h-8">{p.name}</div>
                       <div className="text-[10px] text-muted-foreground font-mono mt-1">{p.sku}</div>
@@ -1219,6 +1253,39 @@ function HRModule() {
     else { const j = await r.json(); toast.error(j.error); }
   };
 
+  const terminateEmployee = async (id: string, name: string) => {
+    const reason = prompt(`سبب إنهاء عقد الموظف "${name}":`, "انتهاء العقد");
+    if (reason === null) return;
+    const r = await fetch(`/api/employees/${id}/terminate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ terminationDate: new Date().toISOString(), reason }),
+    });
+    const j = await r.json();
+    if (r.ok) { toast.success(`تم إنهاء عقد ${name}`); load(); }
+    else { toast.error(j.error); }
+  };
+
+  const reactivateEmployee = async (id: string, name: string) => {
+    if (!confirm(`إعادة تفعيل الموظف "${name}"؟`)) return;
+    const r = await fetch(`/api/employees/${id}/terminate`, { method: "PATCH" });
+    if (r.ok) { toast.success(`تمت إعادة تفعيل ${name}`); load(); }
+    else { const j = await r.json(); toast.error(j.error); }
+  };
+
+  const resetUserPassword = async (userId: string, userName: string) => {
+    const newPassword = prompt(`كلمة المرور الجديدة للمستخدم "${userName}":`, "");
+    if (!newPassword) return;
+    if (newPassword.length < 6) { toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
+    const r = await fetch(`/api/admin/users/${userId}/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword }),
+    });
+    if (r.ok) { toast.success(`تم إعادة تعيين كلمة مرور ${userName}`); }
+    else { const j = await r.json(); toast.error(j.error); }
+  };
+
   if (loading) return <SkeletonRow />;
 
   return (
@@ -1251,7 +1318,12 @@ function HRModule() {
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm">{e.name}</div>
                         <div className="text-[10px] text-muted-foreground font-mono">{e.code}</div>
-                        <Badge variant="outline" className="text-[10px] mt-1">{e.position}</Badge>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Badge variant="outline" className="text-[10px]">{e.position}</Badge>
+                          {e.status === "TERMINATED" && (
+                            <Badge variant="outline" className="text-[10px] text-rose-400 border-rose-400/30">منتهي العقد</Badge>
+                          )}
+                        </div>
                       </div>
                       {canEdit && (
                         <DropdownMenu>
@@ -1264,8 +1336,17 @@ function HRModule() {
                             <DropdownMenuItem onClick={() => { setEditingEmployee(e); setShowEmployeeForm(true); }}>
                               <Edit className="w-3 h-3 ml-2" /> تعديل
                             </DropdownMenuItem>
+                            {e.status !== "TERMINATED" ? (
+                              <DropdownMenuItem className="text-amber-400" onClick={() => terminateEmployee(e.id, e.name)}>
+                                <PowerOff className="w-3 h-3 ml-2" /> إنهاء العقد
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem className="text-emerald-400" onClick={() => reactivateEmployee(e.id, e.name)}>
+                                <RefreshCw className="w-3 h-3 ml-2" /> إعادة التفعيل
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem className="text-rose-400" onClick={() => deleteEmployee(e.id, e.name)}>
-                              <Trash2 className="w-3 h-3 ml-2" /> حذف
+                              <Trash2 className="w-3 h-3 ml-2" /> حذف نهائي
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1594,7 +1675,21 @@ function ERPModule() {
                       {data.products.map((p: any) => (
                         <TableRow key={p.id} className={p.isLowStock ? "bg-rose-500/5" : ""}>
                           <TableCell className="font-mono text-xs">{p.sku}</TableCell>
-                          <TableCell><div className="font-medium text-sm">{p.name}</div>{p.barcode && <div className="text-[10px] text-muted-foreground font-mono">{p.barcode}</div>}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-md bg-muted/40 overflow-hidden flex items-center justify-center shrink-0">
+                                {p.imageUrl ? (
+                                  <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium text-sm">{p.name}</div>
+                                {p.barcode && <div className="text-[10px] text-muted-foreground font-mono">{p.barcode}</div>}
+                              </div>
+                            </div>
+                          </TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px]">{p.category}</Badge></TableCell>
                           <TableCell className="text-left font-mono text-xs">{fmtSAR(p.costPrice)}</TableCell>
                           <TableCell className="text-left font-mono text-xs text-emerald-400">{fmtSAR(p.salePrice)}</TableCell>
@@ -1709,8 +1804,29 @@ function ProductFormDialog({ product, onClose, onSaved }: any) {
     salePrice: product?.salePrice || 0,
     vatRate: product?.vatRate ?? 15,
     reorderLevel: product?.reorderLevel ?? 10,
+    imageUrl: product?.imageUrl || "",
   });
   const [saving, setSaving] = useState(false);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("حجم الصورة يجب أن يكون أقل من 2 ميجابايت");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm({ ...form, imageUrl: reader.result as string });
+      toast.success("تم رفع الصورة");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setForm({ ...form, imageUrl: "" });
+    toast.info("تم حذف الصورة");
+  };
 
   const submit = async () => {
     if (!form.sku || !form.name || form.salePrice === undefined) {
@@ -1732,8 +1848,34 @@ function ProductFormDialog({ product, onClose, onSaved }: any) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{product ? "تعديل منتج" : "إضافة منتج جديد"}</DialogTitle><DialogDescription>{product ? "تعديل بيانات المنتج الحالي" : "إضافة منتج جديد للمخزون"}</DialogDescription></DialogHeader>
+        {/* Image upload */}
+        <div className="flex items-center gap-3">
+          <div className="w-20 h-20 rounded-lg bg-muted/40 border border-border overflow-hidden flex items-center justify-center shrink-0">
+            {form.imageUrl ? (
+              <img src={form.imageUrl} alt="معاينة" className="w-full h-full object-cover" />
+            ) : (
+              <Barcode className="w-6 h-6 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex-1 space-y-2">
+            <label className="cursor-pointer">
+              <span className="inline-flex items-center justify-center gap-2 w-full px-3 py-2 rounded-md bg-primary/15 text-primary text-xs font-medium hover:bg-primary/25 transition-colors">
+                <Upload className="w-3.5 h-3.5" />
+                {form.imageUrl ? "تغيير الصورة" : "رفع صورة"}
+              </span>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            </label>
+            {form.imageUrl && (
+              <Button variant="outline" size="sm" onClick={removeImage} className="w-full h-7 text-xs">
+                <X className="w-3 h-3 ml-1" />
+                حذف الصورة
+              </Button>
+            )}
+            <p className="text-[10px] text-muted-foreground">PNG/JPG/WEBP — حد أقصى 2MB</p>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div><Label className="text-xs">SKU *</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="bg-muted/40 mt-1" /></div>
           <div><Label className="text-xs">الباركود</Label><Input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="bg-muted/40 mt-1" /></div>
@@ -1824,6 +1966,13 @@ function AdminModule() {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
   const [showSettingsForm, setShowSettingsForm] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState<{ userId: string; userName: string; data: any } | null>(null);
+
+  const viewUserSessions = async (userId: string, userName: string) => {
+    const r = await fetch(`/api/admin/users/${userId}/sessions`);
+    const j = await r.json();
+    setSessionHistory({ userId, userName, data: j });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1901,7 +2050,9 @@ function AdminModule() {
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>المستخدم</TableHead><TableHead>الدور</TableHead>
-                    <TableHead>الفرع</TableHead><TableHead>آخر دخول</TableHead>
+                    <TableHead>الفرع</TableHead>
+                    <TableHead>آخر دخول</TableHead>
+                    <TableHead>آخر خروج</TableHead>
                     <TableHead className="text-center">الحالة</TableHead>
                     <TableHead className="text-center">إجراءات</TableHead>
                   </TableRow></TableHeader>
@@ -1930,14 +2081,31 @@ function AdminModule() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-xs">{u.branchName || "—"}</TableCell>
-                        <TableCell className="text-xs">{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("ar-SA") : "—"}</TableCell>
+                        <TableCell className="text-[10px] font-mono">
+                          {u.lastLogin ? (
+                            <div>
+                              <div>{new Date(u.lastLogin).toLocaleDateString("ar-SA")}</div>
+                              <div className="text-muted-foreground">{new Date(u.lastLogin).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</div>
+                            </div>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-[10px] font-mono">
+                          {u.lastLogout ? (
+                            <div>
+                              <div>{new Date(u.lastLogout).toLocaleDateString("ar-SA")}</div>
+                              <div className="text-muted-foreground">{new Date(u.lastLogout).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</div>
+                            </div>
+                          ) : "—"}
+                        </TableCell>
                         <TableCell className="text-center">
                           <Switch checked={u.isActive} onCheckedChange={() => toggleActive(u.id, u.isActive, u.name)} />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 justify-center">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingUser(u); setShowUserForm(true); }}><Edit className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400" onClick={() => deleteUser(u.id, u.name)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="تعديل" onClick={() => { setEditingUser(u); setShowUserForm(true); }}><Edit className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-400" title="إعادة تعيين كلمة المرور" onClick={() => resetUserPassword(u.id, u.name)}><Key className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-cyan-400" title="سجل الجلسات" onClick={() => viewUserSessions(u.id, u.name)}><History className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400" title="حذف" onClick={() => deleteUser(u.id, u.name)}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2068,7 +2236,96 @@ function AdminModule() {
           onSaved={() => { setShowSettingsForm(false); load(); }}
         />
       )}
+      {sessionHistory && (
+        <SessionHistoryDialog
+          data={sessionHistory.data}
+          userName={sessionHistory.userName}
+          onClose={() => setSessionHistory(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function SessionHistoryDialog({ data, userName, onClose }: any) {
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>سجل جلسات — {userName}</DialogTitle>
+          <DialogDescription>عرض آخر دخول/خروج والجلسات النشطة</DialogDescription>
+        </DialogHeader>
+        {data && (
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                <div className="text-[10px] text-muted-foreground">آخر دخول</div>
+                <div className="text-xs font-bold text-emerald-400">
+                  {data.user.lastLogin ? new Date(data.user.lastLogin).toLocaleString("ar-SA") : "لم يسجّل بعد"}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                <div className="text-[10px] text-muted-foreground">آخر خروج</div>
+                <div className="text-xs font-bold text-rose-400">
+                  {data.user.lastLogout ? new Date(data.user.lastLogout).toLocaleString("ar-SA") : "—"}
+                </div>
+              </div>
+            </div>
+            {/* Active sessions */}
+            <div>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-cyan" />
+                جلسات نشطة ({data.activeSessions?.length || 0})
+              </h4>
+              {data.activeSessions?.length > 0 ? (
+                <div className="space-y-1.5">
+                  {data.activeSessions.map((s: any) => (
+                    <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 text-[10px]">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                        <span className="font-mono">{s.ipAddress || "—"}</span>
+                      </div>
+                      <span className="text-muted-foreground">منذ {new Date(s.createdAt).toLocaleString("ar-SA")}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">لا توجد جلسات نشطة</p>
+              )}
+            </div>
+            {/* Login history */}
+            <div>
+              <h4 className="text-xs font-semibold mb-2 flex items-center gap-2">
+                <History className="w-3 h-3 text-cyan-400" />
+                سجل الدخول/الخروج ({data.loginHistory?.length || 0})
+              </h4>
+              <ScrollArea className="max-h-60">
+                <div className="space-y-1">
+                  {data.loginHistory?.map((log: any) => (
+                    <div key={log.id} className="flex items-center justify-between p-2 rounded-md bg-muted/20 text-[10px]">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={`text-[9px] ${log.action === "LOGIN" ? "text-emerald-400 border-emerald-400/30" : "text-rose-400 border-rose-400/30"}`}>
+                          {log.action === "LOGIN" ? "دخول" : "خروج"}
+                        </Badge>
+                        <span className="font-mono text-muted-foreground">{log.ipAddress || "—"}</span>
+                      </div>
+                      <span className="font-mono">{new Date(log.createdAt).toLocaleString("ar-SA")}</span>
+                    </div>
+                  ))}
+                  {(!data.loginHistory || data.loginHistory.length === 0) && (
+                    <p className="text-[11px] text-muted-foreground text-center py-4">لا يوجد سجل</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button onClick={onClose} className="w-full">إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

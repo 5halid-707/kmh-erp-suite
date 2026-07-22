@@ -27,6 +27,7 @@ export async function GET() {
       isActive: u.isActive,
       avatarColor: u.avatarColor,
       lastLogin: u.lastLogin,
+      lastLogout: u.lastLogout,
       createdAt: u.createdAt,
     })),
   });

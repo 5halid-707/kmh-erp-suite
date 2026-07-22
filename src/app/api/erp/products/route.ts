@@ -65,6 +65,7 @@ export async function GET() {
       unit: p.unit,
       costPrice: p.costPrice,
       salePrice: p.salePrice,
+      imageUrl: p.imageUrl,
       stock: stockMap.get(p.id) || 0,
       stockValue: p.costPrice * (stockMap.get(p.id) || 0),
       reorderLevel: p.reorderLevel,

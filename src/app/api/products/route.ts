@@ -42,6 +42,7 @@ export async function GET() {
       salePrice: p.salePrice,
       vatRate: p.vatRate,
       reorderLevel: p.reorderLevel,
+      imageUrl: p.imageUrl,
       stock,
       isLowStock: stock <= p.reorderLevel,
       isActive: p.isActive,
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const { sku, barcode, name, nameEn, description, categoryId, branchId, unit, costPrice, salePrice, vatRate, reorderLevel } = body;
+    const { sku, barcode, name, nameEn, description, categoryId, branchId, unit, costPrice, salePrice, vatRate, reorderLevel, imageUrl } = body;
     if (!sku || !name || salePrice === undefined) {
       return NextResponse.json({ error: "SKU، الاسم، وسعر البيع مطلوبة" }, { status: 400 });
     }
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
         salePrice: parseFloat(salePrice) || 0,
         vatRate: vatRate !== undefined ? parseFloat(vatRate) : 15.0,
         reorderLevel: parseInt(reorderLevel) || 10,
+        imageUrl: imageUrl || null,
       },
     });
     await logAction({

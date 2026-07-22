@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) {
       return NextResponse.json({ error: "المنتج غير موجود" }, { status: 404 });
     }
-    const allowed = ["sku", "barcode", "name", "nameEn", "description", "categoryId", "branchId", "unit", "costPrice", "salePrice", "vatRate", "reorderLevel", "isActive"];
+    const allowed = ["sku", "barcode", "name", "nameEn", "description", "categoryId", "branchId", "unit", "costPrice", "salePrice", "vatRate", "reorderLevel", "imageUrl", "isActive"];
     const data: any = {};
     for (const k of allowed) {
       if (body[k] !== undefined) {

@@ -37,6 +37,7 @@ export async function GET() {
       costPrice: p.costPrice,
       vatRate: p.vatRate,
       unit: p.unit,
+      imageUrl: p.imageUrl,
     })),
   });
 }

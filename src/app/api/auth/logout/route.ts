@@ -13,6 +13,11 @@ export async function POST() {
     await destroySession(token);
   }
   if (user) {
+    // Update lastLogout timestamp
+    await db.user.update({
+      where: { id: user.id },
+      data: { lastLogout: new Date() },
+    });
     await logAction({
       organizationId: user.organizationId,
       userId: user.id,
@@ -26,3 +31,4 @@ export async function POST() {
   res.cookies.delete(SESSION_COOKIE_NAME);
   return res;
 }
+

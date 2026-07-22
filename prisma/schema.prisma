@@ -80,6 +80,7 @@ model User {
   isActive       Boolean  @default(true)
   avatarColor    String   @default("cyan")
   lastLogin      DateTime?
+  lastLogout     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -241,6 +242,7 @@ model Product {
   salePrice      Float    @default(0)
   vatRate        Float    @default(15.0)
   reorderLevel   Int      @default(10)
+  imageUrl       String?  // base64 data URL for product image
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -518,6 +520,7 @@ model Employee {
   department     String?
   hireDate       DateTime @default(now())
   terminationDate DateTime?
+  terminationReason String?
   baseSalary     Float    @default(0)
   allowances     Float    @default(0)
   status         EmployeeStatus @default(ACTIVE)
